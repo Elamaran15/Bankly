@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>com.bankly</groupId>
+		<artifactId>bankly-monorepo</artifactId>
+		<version>0.0.1</version> <!-- IMPORTANT: Match the version of your root bankly-monorepo POM -->
+		<relativePath>../pom.xml</relativePath> <!-- Path to your root parent POM -->
+	</parent>
+
+	<!--
+        IMPORTANT: Ensure this artifactId matches your service's directory name exactly.
+        Based on your previous image, it might be 'userservice' or 'user-service'.
+        I'm assuming 'userservice' for consistency with previous discussion.
+        If your folder is 'user-service', keep it as 'user-service'.
+    -->
+	<artifactId>userservice</artifactId>
+	<name>userservice</name>
+	<description>User service of Bankly app</description>
+
+	<!--
+        Properties like java.version and spring-cloud.version are now inherited from the parent.
+        Remove this <properties> block.
+    -->
+	<!-- <properties>
+        <java.version>21</java.version>
+        <spring-cloud.version>2025.0.0</spring-cloud.version>
+    </properties> -->
+
+	<dependencies>
+		<!-- Spring Boot Starters - Versions are managed by parent's dependencyManagement -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+
+
+		<!-- Micrometer & Zipkin - Versions are managed by parent's dependencyManagement -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-tracing-bridge-brave</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.zipkin.reporter2</groupId>
+			<artifactId>zipkin-reporter-brave</artifactId>
+		</dependency>
+
+		<!-- Liquibase for DB migrations - Version is managed by parent's dependencyManagement -->
+		<dependency>
+			<groupId>org.liquibase</groupId>
+			<artifactId>liquibase-core</artifactId>
+		</dependency>
+
+		<!-- Spring Cloud Config is removed as per discussion -->
+		<!-- <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-config</artifactId>
+        </dependency> -->
+
+		<!-- Eureka Client - Version is managed by parent's dependencyManagement -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+		</dependency>
+
+		<!-- JWT Dependencies - Versions are managed by parent's dependencyManagement -->
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-api</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-impl</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-jackson</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- PostgreSQL Driver - Version is managed by parent's dependencyManagement -->
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- Lombok - Version is managed by parent's dependencyManagement -->
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<scope>provided</scope>
+			<!-- Remove <version>1.18.30</version> if managed by parent -->
+		</dependency>
+
+		<!-- DevTools for hot reload - Version is managed by parent's dependencyManagement -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-devtools</artifactId>
+			<scope>runtime</scope>
+			<optional>true</optional>
+		</dependency>
+
+		<!-- Testing - Version is managed by parent's dependencyManagement -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<!--
+        dependencyManagement is now handled by the parent POM.
+        Remove this <dependencyManagement> block.
+    -->
+	<!-- <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement> -->
+
+	<build>
+		<plugins>
+			<!-- Maven Compiler Plugin - Version is managed by parent's pluginManagement -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<!-- Remove <version>3.11.0</version> if managed by parent -->
+				<configuration>
+					<source>${java.version}</source>
+					<target>${java.version}</target>
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+							<!-- Remove <version>1.18.30</version> if managed by parent -->
+						</path>
+					</annotationProcessorPaths>
+				</configuration>
+			</plugin>
+
+			<!-- Spring Boot Maven Plugin - Version is managed by parent's pluginManagement -->
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<image>
+						<!-- Standard local image name -->
+						<name>bankly/${project.artifactId}:${project.version}</name>
+					</image>
+				</configuration>
+			</plugin>
+
+			<!-- SonarQube Maven Plugin - Add this plugin, version managed by parent -->
+			<plugin>
+				<groupId>org.sonarsource.scanner.maven</groupId>
+				<artifactId>sonar-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+</project>

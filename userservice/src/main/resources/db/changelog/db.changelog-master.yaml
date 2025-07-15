@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - include:
+      file: changesets/users-schema.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changesets/account-schema.yaml
+      relativeToChangelogFile: true

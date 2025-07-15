@@ -1,0 +1,226 @@
+volumes:
+  postgres_data: # Consolidated named volume for Postgversion: '3.8'
+
+services:
+  # --- Infrastructure Services ---
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181" # Expose Zookeeper port to host (optional, for debugging)
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181"] # Corrected test format
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    hostname: kafka
+    container_name: kafka
+    ports:
+      - "9092:9092"   # This maps the internal PLAINTEXT_INTERNAL listener to host's 9092
+      - "29092:29092" # This maps the internal PLAINTEXT_EXTERNAL listener to host's 29092
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Define listeners on different internal ports to avoid conflict
+      KAFKA_LISTENERS: PLAINTEXT_INTERNAL://kafka:9092,PLAINTEXT_EXTERNAL://0.0.0.0:29092
+      # Advertise internal listener using service name, external using localhost and its mapped port
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_INTERNAL://kafka:9092,PLAINTEXT_EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT_INTERNAL:PLAINTEXT,PLAINTEXT_EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      # Healthcheck should use the internal listener that other containers will use
+      test: [ "CMD-SHELL", "kafka-topics --bootstrap-server kafka:9092 --list || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  zipkin:
+    image: openzipkin/zipkin:2.23.0 # Or whatever specific version you chose, or 'latest'
+    hostname: zipkin
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    environment:
+      STORAGE_TYPE: mem
+    healthcheck:
+      # Use netcat to check if the port is open, which is a more basic check
+      test: [ "CMD-SHELL", "nc -z localhost 9411 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s # Keep this increased start period
+    restart: unless-stopped
+
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8085:8080" # Map host port 8085 to container port 8080
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092 # Use the internal Kafka listener
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    depends_on:
+      kafka:
+        condition: service_healthy
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"] # Corrected test format
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  bankly-postgres:
+    image: postgres:15-alpine
+    hostname: bankly-postgres
+    container_name: bankly-postgres
+    ports:
+      - "5432:5432" # Map to host port 5432 for optional direct access from your machine
+    environment:
+      POSTGRES_DB: postgres_default # A default database created on startup, not your specific ones
+      POSTGRES_USER: banklyuser    # Common user for all services
+      POSTGRES_PASSWORD: banklypass # Common password for all services
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persistent data volume
+      - ./db-init:/docker-entrypoint-initdb.d # Mount the initialization script
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1"] # Corrected test format
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # --- Spring Cloud Services ---
+
+  eureka-server:
+    image: bankly/eureka-service:0.0.1
+    hostname: eureka-server
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+    environment:
+      ZIPKIN_HOST: zipkin
+    depends_on:
+      zipkin:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8761/actuator/health || exit 1" ]
+      interval: 10s
+      timeout: 10s # Increased timeout
+      retries: 5
+      start_period: 60s # Increased start_period
+    restart: unless-stopped
+
+  # --- Microservices ---
+
+  userservice: # Changed to 'userservice' to match artifactId and folder name
+    image: bankly/userservice:0.0.1 # Use your locally built image
+    hostname: userservice
+    container_name: userservice
+    ports:
+      - "8081:8081"
+    environment:
+      # Overriding application.yml defaults for Docker environment
+      EUREKA_HOST: eureka-server
+      SPRING_DATASOURCE_URL: jdbc:postgresql://bankly-postgres:5432/userservice # Connect to single DB instance with specific DB name
+      SPRING_DATASOURCE_USERNAME: banklyuser
+      SPRING_DATASOURCE_PASSWORD: banklypass
+      ZIPKIN_HOST: zipkin
+    depends_on:
+      bankly-postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+      zipkin:
+        condition: service_healthy
+    restart: unless-stopped
+
+  transactionservice:
+    image: bankly/transactionservice:0.0.1 # Use your locally built image
+    hostname: transactionservice
+    container_name: transactionservice
+    ports:
+      - "8082:8082"
+    environment:
+      EUREKA_HOST: eureka-server
+      SPRING_DATASOURCE_URL: jdbc:postgresql://bankly-postgres:5432/transactionservice # Connect to single DB instance with specific DB name
+      SPRING_DATASOURCE_USERNAME: banklyuser
+      SPRING_DATASOURCE_PASSWORD: banklypass
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092 # Kafka internal Docker network address
+      ZIPKIN_HOST: zipkin
+    depends_on:
+      bankly-postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      zipkin:
+        condition: service_healthy
+    restart: unless-stopped
+
+  paymentservice:
+    image: bankly/paymentservice:0.0.1 # Use your locally built image
+    hostname: paymentservice
+    container_name: paymentservice
+    ports:
+      - "8083:8083"
+    environment:
+      EUREKA_HOST: eureka-server
+      SPRING_DATASOURCE_URL: jdbc:postgresql://bankly-postgres:5432/paymentservice # Connect to single DB instance with specific DB name
+      SPRING_DATASOURCE_USERNAME: banklyuser
+      SPRING_DATASOURCE_PASSWORD: banklypass
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ZIPKIN_HOST: zipkin
+    depends_on:
+      bankly-postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      zipkin:
+        condition: service_healthy
+    restart: unless-stopped
+
+  apigatewayservice: # Changed to 'apigatewayservice' to match artifactId and folder name
+    image: bankly/apigatewayservice:0.0.1 # Use your locally built image
+    hostname: apigatewayservice
+    container_name: apigatewayservice
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_HOST: eureka-server
+      ZIPKIN_HOST: zipkin
+      # JWT_SECRET: your_api_gateway_jwt_secret_here # Uncomment and provide if needed for local testing
+      # JWT_EXPIRATION_MS: "3600000" # Uncomment and provide if needed for local testing
+    depends_on:
+      eureka-server:
+        condition: service_started
+      userservice: # Match the service name 'userservice'
+        condition: service_started
+      transactionservice:
+        condition: service_started
+      paymentservice:
+        condition: service_started
+      zipkin:
+        condition: service_healthy
+    restart: unless-stopped
+

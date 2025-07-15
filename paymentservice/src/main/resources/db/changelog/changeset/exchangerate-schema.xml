@@ -1,0 +1,81 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+
+    <changeSet id="create-exchange-rate-table" author="elamaran">
+        <createTable tableName="exchange_rate">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="from_currency" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="to_currency" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rate" type="DECIMAL(19,4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_updated" type="TIMESTAMP"/>
+        </createTable>
+
+        <addUniqueConstraint
+                columnNames="from_currency, to_currency"
+                tableName="exchange_rate"
+                constraintName="uk_currency_pair"/>
+    </changeSet>
+
+    <changeSet id="enable-pgcrypto" author="elamaran">
+        <sql>CREATE EXTENSION IF NOT EXISTS pgcrypto;</sql>
+    </changeSet>
+
+    <changeSet id="insert-exchange-rates" author="elamaran">
+        <insert tableName="exchange_rate">
+            <column name="id" valueComputed="gen_random_uuid()"/>
+            <column name="from_currency" value="USD"/>
+            <column name="to_currency" value="INR"/>
+            <column name="rate" valueNumeric="83.20"/>
+        </insert>
+
+        <insert tableName="exchange_rate">
+            <column name="id" valueComputed="gen_random_uuid()"/>
+            <column name="from_currency" value="INR"/>
+            <column name="to_currency" value="USD"/>
+            <column name="rate" valueNumeric="0.012"/>
+        </insert>
+
+        <insert tableName="exchange_rate">
+            <column name="id" valueComputed="gen_random_uuid()"/>
+            <column name="from_currency" value="EUR"/>
+            <column name="to_currency" value="INR"/>
+            <column name="rate" valueNumeric="90.10"/>
+        </insert>
+
+        <insert tableName="exchange_rate">
+            <column name="id" valueComputed="gen_random_uuid()"/>
+            <column name="from_currency" value="INR"/>
+            <column name="to_currency" value="EUR"/>
+            <column name="rate" valueNumeric="0.011"/>
+        </insert>
+
+        <insert tableName="exchange_rate">
+            <column name="id" valueComputed="gen_random_uuid()"/>
+            <column name="from_currency" value="USD"/>
+            <column name="to_currency" value="EUR"/>
+            <column name="rate" valueNumeric="0.92"/>
+        </insert>
+
+        <insert tableName="exchange_rate">
+            <column name="id" valueComputed="gen_random_uuid()"/>
+            <column name="from_currency" value="EUR"/>
+            <column name="to_currency" value="USD"/>
+            <column name="rate" valueNumeric="1.09"/>
+        </insert>
+    </changeSet>
+
+
+
+</databaseChangeLog>

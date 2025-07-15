@@ -1,0 +1,23 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+
+    <changeSet id="create-payment-log-table" author="elamaran">
+    <createTable tableName="payment_log">
+        <column name="id" type="UUID">
+            <constraints primaryKey="true" nullable="false"/>
+        </column>
+        <column name="transaction_id" type="UUID"/>
+        <column name="converted_amount" type="NUMERIC(19,2)"/>
+        <column name="transaction_type" type="VARCHAR(255)"/>
+        <column name="transaction_status" type="VARCHAR(255)"/>
+        <column name="payment_date" type="TIMESTAMP"/>
+        <column name="process_date" type="TIMESTAMP"/>
+        <column name="user_name" type="VARCHAR(255)"/>
+    </createTable>
+    </changeSet>
+
+</databaseChangeLog>

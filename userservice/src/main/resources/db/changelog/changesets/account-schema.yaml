@@ -1,0 +1,38 @@
+databaseChangeLog:
+- changeSet:
+    id: 2
+    author: yourname
+    changes:
+      - createTable:
+          tableName: account
+          columns:
+            - column:
+                name: id
+                type: UUID
+                constraints:
+                  primaryKey: true
+                  nullable: false
+            - column:
+                name: account_number
+                type: VARCHAR(255)
+                constraints:
+                  nullable: false
+                  unique: true
+            - column:
+                name: balance
+                type: DECIMAL(19,2)
+                constraints:
+                  nullable: false
+            - column:
+                name: account_type
+                type: VARCHAR(50) # <-- Added enum column as string
+                constraints:
+                  nullable: false
+            - column:
+                name: user_id
+                type: UUID
+                constraints:
+                  nullable: false
+                  foreignKeyName: fk_account_user
+                  references: users(id)
+

@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: eureka-server
+
+server:
+  port: 8761
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+
+  instance:
+    hostname:  ${EUREKA_HOSTNAME:localhost}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*" # Expose all management endpoints, including health for healthchecks
+  endpoint:
+    health:
+      show-details: always
