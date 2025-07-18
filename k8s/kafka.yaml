@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  namespace: bankly
+  labels:
+    app: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: bitnami/kafka:3.7.0 # <--- CHANGED IMAGE TO BITNAMI
+          ports:
+            - containerPort: 9092
+          env:
+            - name: KAFKA_CFG_BROKER_ID # <--- BITNAMI ENV VAR NAME
+              value: "1"
+            - name: KAFKA_CFG_ZOOKEEPER_CONNECT # <--- BITNAMI ENV VAR NAME
+              value: zookeeper:2181
+            - name: KAFKA_CFG_LISTENERS # <--- BITNAMI ENV VAR NAME
+              value: PLAINTEXT://0.0.0.0:9092
+            - name: KAFKA_CFG_ADVERTISED_LISTENERS # <--- BITNAMI ENV VAR NAME
+              value: PLAINTEXT://kafka:9092
+            - name: ALLOW_PLAINTEXT_LISTENER # <--- REQUIRED FOR BITNAMI PLAINTEXT
+              value: "yes"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+          resources: # Keeping resources as they are good practice
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: bankly
+spec:
+  selector:
+    app: kafka
+  ports:
+    - protocol: TCP
+      port: 9092
+      targetPort: 9092
+  type: ClusterIP

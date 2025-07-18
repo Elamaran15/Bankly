@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apigatewayservice
+  namespace: bankly
+  labels:
+    app: apigatewayservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: apigatewayservice
+  template:
+    metadata:
+      labels:
+        app: apigatewayservice
+    spec:
+      dnsPolicy: ClusterFirstWithHostNet
+      dnsConfig:
+        nameservers:
+          - 34.118.224.10
+      containers:
+        - name: apigatewayservice
+          image: asia-south1-docker.pkg.dev/bankly-microservices-project/bankly-images/apigatewayservice:0.0.1 # Using 0.0.1 tag
+          ports:
+            - containerPort: 8080 # Assuming your API Gateway listens on 8080
+          env:
+            - name: EUREKA_HOST # Corrected env var name
+              value: eureka-server
+            - name: SPRING_ZIPKIN_BASEURL # Corrected env var name for Spring Boot Actuator
+              value: http://zipkin:9411/api/v2/spans # Corrected Zipkin endpoint path
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 5
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apigatewayservice
+  namespace: bankly
+spec:
+  selector:
+    app: apigatewayservice
+  ports:
+    - protocol: TCP
+      port: 80 # Service port
+      targetPort: 8080 # Container port
+  type: ClusterIP

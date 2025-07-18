@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: userservice
+  namespace: bankly
+  labels:
+    app: userservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: userservice
+  template:
+    metadata:
+      labels:
+        app: userservice
+    spec:
+      dnsPolicy: ClusterFirstWithHostNet
+      dnsConfig:
+        nameservers:
+          - 34.118.224.10
+      containers:
+        - name: userservice
+          image: asia-south1-docker.pkg.dev/bankly-microservices-project/bankly-images/userservice:0.0.1
+          ports:
+            - containerPort: 8081
+          env:
+            - name: EUREKA_HOST
+              value: eureka-server
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://bankly-postgres:5432/userservice
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: bankly-db-credentials
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bankly-db-credentials
+                  key: POSTGRES_PASSWORD
+            - name: ZIPKIN_HOST
+              value: http://zipkin:9411/api/v2/spans
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 5
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: userservice
+  namespace: bankly
+spec:
+  selector:
+    app: userservice
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8081
+  type: ClusterIP

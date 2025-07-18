@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paymentservice
+  namespace: bankly
+  labels:
+    app: paymentservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: paymentservice
+  template:
+    metadata:
+      labels:
+        app: paymentservice
+    spec:
+      dnsPolicy: ClusterFirstWithHostNet
+      dnsConfig:
+        nameservers:
+          - 34.118.224.10
+      containers:
+        - name: paymentservice
+          image: asia-south1-docker.pkg.dev/bankly-microservices-project/bankly-images/paymentservice:0.0.1 # Using 0.0.1 tag
+          ports:
+            - containerPort: 8083 # Assuming your payment service listens on 8082
+          env:
+            - name: EUREKA_HOST # Corrected env var name
+              value: eureka-server
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://bankly-postgres:5432/paymentservice
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: bankly-db-credentials
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bankly-db-credentials
+                  key: POSTGRES_PASSWORD
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS # Corrected env var name
+              value: kafka:9092
+            - name: SPRING_ZIPKIN_BASEURL # Corrected env var name
+              value: http://zipkin:9411/api/v2/spans # Corrected Zipkin endpoint path
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8083
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8083
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 5
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paymentservice
+  namespace: bankly
+spec:
+  selector:
+    app: paymentservice
+  ports:
+    - protocol: TCP
+      port: 80 # Service port
+      targetPort: 8083 # Container port
+  type: ClusterIP

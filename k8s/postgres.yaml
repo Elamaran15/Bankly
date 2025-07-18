@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bankly-postgres
+  namespace: bankly
+  labels:
+    app: bankly-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bankly-postgres
+  template:
+    metadata:
+      labels:
+        app: bankly-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine # Using 16-alpine for consistency, you had 15-alpine before
+          env:
+            - name: POSTGRES_DB
+              value: bankly_default_db
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: bankly-db-credentials
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bankly-db-credentials
+                  key: POSTGRES_PASSWORD
+            - name: PGDATA # <--- ADD THIS ENVIRONMENT VARIABLE
+              value: /var/lib/postgresql/data/pgdata # <--- Tell Postgres to use this subdirectory
+          ports:
+            - containerPort: 5432
+              name: postgres
+          volumeMounts:
+            - name: postgres-storage
+              # Mount the main volume to a parent directory, e.g., /var/lib/postgresql/data
+              # The PGDATA env var will then point to a sub-path within this mount
+              mountPath: /var/lib/postgresql/data
+            - name: db-init-volume
+              mountPath: /docker-entrypoint-initdb.d/
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pv-claim
+        - name: db-init-volume
+          configMap:
+            name: postgres-init-scripts
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bankly-postgres
+  namespace: bankly
+spec:
+  selector:
+    app: bankly-postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  type: ClusterIP

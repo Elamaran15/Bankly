@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bankly-ingress
+  namespace: bankly
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /userservice
+            pathType: Prefix
+            backend:
+              service:
+                name: userservice
+                port:
+                  number: 80
+          - path: /transactionservice
+            pathType: Prefix
+            backend:
+              service:
+                name: transactionservice
+                port:
+                  number: 80
+          - path: /paymentservice
+            pathType: Prefix
+            backend:
+              service:
+                name: paymentservice
+                port:
+                  number: 80
+          - path: / # Default path for API Gateway
+            pathType: Prefix
+            backend:
+              service:
+                name: apigatewayservice
+                port:
+                  number: 80

@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zipkin
+  namespace: bankly
+  labels:
+    app: zipkin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zipkin
+  template:
+    metadata:
+      labels:
+        app: zipkin
+    spec:
+      containers:
+        - name: zipkin
+          image: openzipkin/zipkin:2.27 # This is a public image
+          ports:
+            - containerPort: 9411
+          env:
+            - name: STORAGE_TYPE
+              value: mem
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zipkin
+  namespace: bankly
+spec:
+  selector:
+    app: zipkin
+  ports:
+    - protocol: TCP
+      port: 9411
+      targetPort: 9411
+  type: ClusterIP

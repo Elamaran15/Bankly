@@ -1,0 +1,149 @@
+name: Bankly Microservices CI/CD
+
+on:
+  push:
+    branches:
+      - main # Trigger on push to the main branch
+
+env:
+  # GCP Configuration
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: asia-south1
+  GAR_REPO: bankly-images
+  GKE_CLUSTER: bankly-cluster
+  GKE_ZONE: asia-south1-a
+  NAMESPACE: bankly
+  IMAGE_TAG: ${{ github.sha }}
+  SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+
+jobs:
+  build-scan-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Configure Docker for Google Artifact Registry
+        run: gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev
+
+      - name: Build All Microservices JARs and Local Docker Images
+        run: mvn clean install -DskipTests
+
+      - name: Retag and Push Docker Images to Artifact Registry
+        run: |
+          declare -A modules_config=(
+            ["apigatewayservice"]="apigatewayservice:apigatewayservice:apigatewayservice"
+            ["userservice"]="userservice:userservice:userservice"
+            ["transactionservice"]="transactionservice:transactionservice:transactionservice"
+            ["paymentservice"]="paymentservice:paymentservice:paymentservice"
+            ["eurekaservice"]="eurekaservice:eureka-service:eureka-service"
+          )
+
+          LOCAL_BUILD_VERSION="0.0.1"
+
+          for module_dir in "${!modules_config[@]}"; do
+            IFS=":" read -r _ local_artifact_id gar_image_name <<< "${modules_config[$module_dir]}"
+
+            LOCAL_FULL_IMAGE_NAME="bankly/${local_artifact_id}:${LOCAL_BUILD_VERSION}"
+            TARGET_FULL_IMAGE_NAME="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${gar_image_name}:${IMAGE_TAG}"
+
+            echo "--- Processing module: ${module_dir} ---"
+            docker tag "$LOCAL_FULL_IMAGE_NAME" "$TARGET_FULL_IMAGE_NAME" || {
+              echo "Error: Failed to retag $LOCAL_FULL_IMAGE_NAME"; exit 1;
+            }
+
+            docker push "$TARGET_FULL_IMAGE_NAME" || {
+              echo "Error: Failed to push $TARGET_FULL_IMAGE_NAME"; exit 1;
+            }
+
+            echo "Successfully pushed $TARGET_FULL_IMAGE_NAME"
+          done
+
+      - name: SonarQube Scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_PROJECT_KEY: Elamaran15_Bankly
+          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+        run: |
+          mvn sonar:sonar \
+            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+            -Dsonar.host.url=${SONAR_HOST_URL} \
+            -Dsonar.login=${SONAR_TOKEN} \
+            -Dsonar.organization=${SONAR_ORGANIZATION}
+
+      - name: Get GKE Credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: ${{ env.GKE_ZONE }}
+
+      - name: Update Kubernetes YAMLs with new image tags
+        run: |
+          declare -A k8s_image_map=(
+            ["apigatewayservice.yaml"]="apigatewayservice"
+            ["userservice.yaml"]="userservice"
+            ["transactionservice.yaml"]="transactionservice"
+            ["paymentservice.yaml"]="paymentservice"
+            ["eureka-server.yaml"]="eureka-service"
+          )
+
+          for yaml_file in "${!k8s_image_map[@]}"; do
+            image_repo_name="${k8s_image_map[$yaml_file]}"
+            full_path="k8s/${yaml_file}"
+
+            if [ -f "$full_path" ]; then
+              sed -i "s|${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${image_repo_name}:.*|${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${image_repo_name}:${IMAGE_TAG}|g" "$full_path"
+              cat "$full_path"
+            else
+              echo "Warning: YAML file $full_path not found."
+            fi
+          done
+
+      - name: Deploy to GKE
+        run: |
+          cd k8s
+          kubectl apply -f namespace.yaml
+          kubectl apply -f db-secret.yaml
+          kubectl apply -f postgres-init-configmap.yaml
+          kubectl apply -f db-pv-pvc.yaml
+          kubectl apply -f postgres.yaml
+          kubectl apply -f zookeeper.yaml
+          kubectl apply -f kafka.yaml
+          kubectl apply -f zipkin.yaml
+          kubectl apply -f kafka-ui.yaml
+          kubectl apply -f eureka-server.yaml
+          kubectl apply -f userservice.yaml
+          kubectl apply -f transactionservice.yaml
+          kubectl apply -f paymentservice.yaml
+          kubectl apply -f apigatewayservice.yaml
+          kubectl apply -f ingress.yaml
+
+          echo "Waiting for all deployments to be ready..."
+          kubectl rollout status deployment/bankly-postgres -n ${NAMESPACE} --timeout=5m
+          kubectl rollout status deployment/zookeeper -n ${NAMESPACE} --timeout=5m
+          kubectl rollout status deployment/kafka -n ${NAMESPACE} --timeout=5m
+          kubectl rollout status deployment/eureka-server -n ${NAMESPACE} --timeout=5m
+          kubectl rollout status deployment/apigatewayservice -n ${NAMESPACE} --timeout=5m
+
+          kubectl get ingress -n ${NAMESPACE}

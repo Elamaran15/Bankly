@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: bankly
+data:
+  00_create_dbs.sql: |
+    CREATE DATABASE userservice;
+    CREATE DATABASE transactionservice;
+    CREATE DATABASE paymentservice;
